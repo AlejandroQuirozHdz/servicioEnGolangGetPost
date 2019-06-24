@@ -1,14 +1,27 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+var client *mongo.Client
+
+type Person struct {
+	ID        primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	Firstname string             `json:"firstname,omitempty" bson:"firstname,omitempty"`
+	Lastname  string             `json:"lastname,omitempty" bson:"lastname,omitempty"`
+}
 
 type Article struct {
 	Title   string `json:"title"`
@@ -71,6 +84,15 @@ func proceso(w http.ResponseWriter, r *http.Request) {
 func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "Hello Dani")
 }
+func CreatePersonEndpoint(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("content-type", "application/json")
+	var person Person
+	_ = json.NewDecoder(request.Body).Decode(&person)
+	collection := client.Database("thepolyglotdeveloper").Collection("people")
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	result, _ := collection.InsertOne(ctx, person)
+	json.NewEncoder(response).Encode(result)
+}
 
 func handleRequests() {
 
@@ -79,10 +101,19 @@ func handleRequests() {
 	r.HandleFunc("/articles", allArticles)
 	r.HandleFunc("/recuperarDatos", usuarioInfo).Methods("POST")
 	r.HandleFunc("/suma", proceso).Methods("POST")
+	r.HandleFunc("/person", CreatePersonEndpoint).Methods("POST")
 	http.Handle("/", r)
 	log.Fatal(http.ListenAndServe(":8090", nil))
 }
 
+func baseDatosMongoDB() {
+	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, _ = mongo.Connect(ctx, clientOptions)
+	fmt.Println(client)
+}
+
 func main() {
+	baseDatosMongoDB()
 	handleRequests()
 }
